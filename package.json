@@ -1,0 +1,12 @@
+{
+  "name": "winning-numbers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Taiwan uniform invoice winning numbers: scheduled fetch, cross-check, publish winning.json",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/winning.test.js",
+    "update": "node scripts/update.js"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,54 @@
+name: update-winning-numbers
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # 每 3 小時（UTC）；沒有新期別就直接結束、不 commit
+  workflow_dispatch:
+    inputs:
+      overwrite_key:
+        description: "官方更正號碼時，人工確認後填要覆蓋的期別鍵（例 2026-07，只能是檔內最新一期）；平常留空"
+        required: false
+        default: ""
+permissions:
+  contents: write   # push winning.json
+  issues: write     # 失敗時開 Issue
+  actions: write    # 更新後用 workflow_dispatch 叫 pages.yml（GITHUB_TOKEN 的 push 不會觸發別的 workflow，但 workflow_dispatch 可以）
+concurrency:
+  group: update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - run: npm test
+      - name: Fetch, verify, write winning.json
+        id: fetch
+        env:
+          OVERWRITE_KEY: ${{ inputs.overwrite_key }}
+          WN_USER_AGENT: "winning-numbers/1.0 (+https://github.com/${{ github.repository }}; scheduled fetch of public winning numbers)"
+        run: node scripts/update.js
+      - name: Commit if changed, then publish Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "$(git status --porcelain winning.json state.json)" ]; then
+            git config user.name "winning-numbers-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add winning.json state.json
+            git commit -m "update winning numbers $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+            gh workflow run pages.yml   # GITHUB_TOKEN 推的 commit 不會觸發 pages.yml，所以這裡明確叫它
+          fi
+      - name: Open or update failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="號碼更新失敗 $(date -u +%Y-%m)"
+          body="排程失敗（舊的 winning.json 沒有被覆蓋）。請看執行紀錄：${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ -z "$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$title" --body "$body"
+          fi   # 已有同月份未關的 Issue 就不重複開

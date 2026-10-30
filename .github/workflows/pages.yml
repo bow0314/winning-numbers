@@ -1,0 +1,23 @@
+name: pages
+on:
+  workflow_dispatch:   # 由 update.yml 在 winning.json 變動後叫起；也可手動執行
+  push:
+    branches: [main]
+    paths: ["winning.json"]   # 人工（非 GITHUB_TOKEN）推的 winning.json 也會發布
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: mkdir site && cp winning.json site/
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with: { path: site }
+      - id: d
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
